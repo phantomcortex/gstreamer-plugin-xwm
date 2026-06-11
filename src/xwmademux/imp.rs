@@ -63,10 +63,15 @@ struct State {
     skip: u64,
     stage: Stage,
     fmt: Option<Fmt>,
+    /// Total decoded PCM bytes, from the last entry of the `dpds` index. Used to
+    /// report stream duration (xWMA stores no duration in WAVEFORMATEX).
+    dpds_total: Option<u64>,
     /// stream-start/caps/segment already pushed.
     started: bool,
     /// PTS=0 has been stamped on the first outgoing buffer.
     sent_first_buf: bool,
+    /// A duration-changed message has been posted for the known duration.
+    announced_duration: bool,
 }
 
 impl Default for State {
@@ -76,8 +81,10 @@ impl Default for State {
             skip: 0,
             stage: Stage::RiffHeader,
             fmt: None,
+            dpds_total: None,
             started: false,
             sent_first_buf: false,
+            announced_duration: false,
         }
     }
 }
@@ -121,7 +128,15 @@ impl ObjectSubclass for XwmaDemux {
             .build();
 
         let templ = klass.pad_template("src").unwrap();
-        let srcpad = gst::Pad::builder_from_template(&templ).build();
+        let srcpad = gst::Pad::builder_from_template(&templ)
+            .query_function(|pad, parent, query| {
+                XwmaDemux::catch_panic_pad_function(
+                    parent,
+                    || false,
+                    |this| this.src_query(pad, query),
+                )
+            })
+            .build();
 
         Self {
             sinkpad,
@@ -220,7 +235,54 @@ impl XwmaDemux {
             }
         }
 
+        // Once the duration is known (dpds parsed), tell the application so it can
+        // (re)query and draw a complete progress bar.
+        let announce = {
+            let mut state = self.state.lock().unwrap();
+            if state.dpds_total.is_some() && !state.announced_duration {
+                state.announced_duration = true;
+                true
+            } else {
+                false
+            }
+        };
+        if announce {
+            let _ = self
+                .obj()
+                .post_message(gst::message::DurationChanged::builder().build());
+        }
+
         Ok(gst::FlowSuccess::Ok)
+    }
+
+    /// Total stream duration derived from the dpds index and WAVEFORMATEX.
+    fn compute_duration(&self) -> Option<gst::ClockTime> {
+        let state = self.state.lock().unwrap();
+        let fmt = state.fmt?;
+        let total = state.dpds_total?;
+        let bytes_per_frame = (fmt.channels as u64) * ((fmt.bits_per_sample as u64).max(8) / 8);
+        if bytes_per_frame == 0 || fmt.rate == 0 {
+            return None;
+        }
+        let frames = total / bytes_per_frame;
+        let nanos = (frames as u128 * 1_000_000_000u128 / fmt.rate as u128) as u64;
+        Some(gst::ClockTime::from_nseconds(nanos))
+    }
+
+    fn src_query(&self, pad: &gst::Pad, query: &mut gst::QueryRef) -> bool {
+        use gst::QueryViewMut;
+        match query.view_mut() {
+            QueryViewMut::Duration(q) => {
+                if q.format() == gst::Format::Time {
+                    if let Some(dur) = self.compute_duration() {
+                        q.set(dur);
+                        return true;
+                    }
+                }
+                false
+            }
+            _ => gst::Pad::query_default(pad, Some(&*self.obj()), query),
+        }
     }
 
     fn sink_event(&self, _pad: &gst::Pad, event: gst::Event) -> bool {
@@ -317,8 +379,15 @@ impl XwmaDemux {
                     }
                     if &id == b"fmt " {
                         self.parse_fmt(state, size as usize)?;
+                    } else if &id == b"dpds" && size >= 4 {
+                        // The dpds index is a list of cumulative decoded-byte counts;
+                        // the last entry is the total decoded PCM size, which gives the
+                        // stream duration. (Per-entry seeking is phase 2.)
+                        let last = (size - 4) as usize;
+                        state.dpds_total = Some(u32::from_le_bytes(
+                            state.buf[last..last + 4].try_into().unwrap(),
+                        ) as u64);
                     }
-                    // "dpds" and unknown chunks are ignored for now (seeking is phase 2).
                     state.buf.drain(0..need);
                     state.stage = Stage::ChunkHeader;
                 }
