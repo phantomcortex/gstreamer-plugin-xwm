@@ -1,11 +1,11 @@
 [package]
 name = "gst-plugin-xwm"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.80"
 description = "GStreamer plugin for Microsoft xWMA (.xwm) audio: typefinder + demuxer"
 authors = ["killawatt <phantom.github@proton.me>"]
-repository = "https://github.com/DistinctionOS/gstreamer-plugin-xwm"
+repository = "https://github.com/phantomcortex/gstreamer-plugin-xwm"
 license = "MPL-2.0"
 
 [dependencies]

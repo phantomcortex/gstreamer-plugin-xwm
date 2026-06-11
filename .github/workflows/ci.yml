@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    name: Build & test (Fedora ${{ matrix.fedora }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora: [ 'latest', 'rawhide' ]
+    container: fedora:${{ matrix.fedora }}
+    steps:
+      - name: Install toolchain and GStreamer
+        run: |
+          dnf install -y \
+            git rust cargo cargo-c \
+            gstreamer1-devel gstreamer1-plugins-base-devel \
+            gstreamer1-plugins-good gstreamer1-libav
+
+      - uses: actions/checkout@v4
+
+      - name: cargo build
+        run: cargo build --verbose
+
+      - name: cargo test
+        run: cargo test --verbose
+
+      - name: cargo cbuild (plugin .so)
+        run: cargo cbuild --release
+
+      - name: gst-inspect the built plugin
+        run: |
+          SO=$(find target -name libgstxwm.so | head -1)
+          GST_PLUGIN_PATH=$(dirname "$SO") gst-inspect-1.0 xwmademux

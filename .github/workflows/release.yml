@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-rpm:
+    name: Build RPM (Fedora ${{ matrix.fedora }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora: [ 'latest', 'rawhide' ]
+    container: fedora:${{ matrix.fedora }}
+    steps:
+      - name: Install build tooling
+        run: |
+          dnf install -y \
+            git rust cargo cargo-c \
+            gstreamer1-devel gstreamer1-plugins-base-devel \
+            rpm-build rpmdevtools
+
+      - uses: actions/checkout@v4
+
+      - name: Build the RPM
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$PWD"
+          VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          rpmdev-setuptree
+          git archive --format=tar.gz \
+            --prefix="gstreamer-plugin-xwm-${VERSION}/" \
+            -o "$HOME/rpmbuild/SOURCES/gstreamer-plugin-xwm-${VERSION}.tar.gz" HEAD
+          cp packaging/gstreamer-plugin-xwm.spec "$HOME/rpmbuild/SPECS/"
+          rpmbuild -bb "$HOME/rpmbuild/SPECS/gstreamer-plugin-xwm.spec"
+          mkdir -p dist
+          # Ship the runtime plugin RPM only (skip -debuginfo / -debugsource).
+          find "$HOME/rpmbuild/RPMS" -name 'gstreamer-plugin-xwm-*.rpm' \
+            ! -name '*debuginfo*' ! -name '*debugsource*' -exec cp {} dist/ \;
+          ls -l dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-fedora-${{ matrix.fedora }}
+          path: dist/*.rpm
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: build-rpm
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release with RPM assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/**/*.rpm
