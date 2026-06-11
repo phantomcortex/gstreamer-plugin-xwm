@@ -137,4 +137,17 @@ fn demuxes_to_wma_caps_and_packets() {
     // Assert all data bytes were forwarded as packets.
     assert_eq!(total_bytes.load(Ordering::SeqCst), data.len() as u32);
     assert_eq!(buffer_count.load(Ordering::SeqCst), 4); // 256 / 64
+
+    // Assert the duration query is answered from the dpds index. The synthetic
+    // file's last dpds entry is 2000 decoded bytes => 2000 / (2ch * 2 bytes) = 500
+    // frames => 500 / 44100 s.
+    let srcpad = demux.static_pad("src").unwrap();
+    let mut q = gst::query::Duration::new(gst::Format::Time);
+    assert!(srcpad.query(q.query_mut()), "src pad did not answer duration query");
+    let dur = match q.result() {
+        gst::GenericFormattedValue::Time(Some(t)) => t,
+        other => panic!("unexpected duration result: {other:?}"),
+    };
+    let expected = gst::ClockTime::from_nseconds(500u64 * 1_000_000_000 / 44100);
+    assert_eq!(dur, expected);
 }
