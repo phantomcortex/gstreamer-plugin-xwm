@@ -15,7 +15,8 @@ fn init() {
 }
 
 /// Build a minimal valid xWMA file: RIFF/XWMA + fmt + dpds + data.
-fn synth_xwma(channels: u16, rate: u32, block_align: u16, data: &[u8]) -> Vec<u8> {
+/// `dpds` is the cumulative decoded-byte index, one entry per packet.
+fn synth_xwma(channels: u16, rate: u32, block_align: u16, dpds: &[u32], data: &[u8]) -> Vec<u8> {
     fn chunk(id: &[u8; 4], body: &[u8]) -> Vec<u8> {
         let mut v = Vec::new();
         v.extend_from_slice(id);
@@ -37,15 +38,16 @@ fn synth_xwma(channels: u16, rate: u32, block_align: u16, data: &[u8]) -> Vec<u8
     fmt.extend_from_slice(&16u16.to_le_bytes()); // wBitsPerSample
     fmt.extend_from_slice(&0u16.to_le_bytes()); // cbSize
 
-    // dpds: two dummy cumulative-byte entries (exercises chunk skipping).
-    let mut dpds = Vec::new();
-    dpds.extend_from_slice(&1000u32.to_le_bytes());
-    dpds.extend_from_slice(&2000u32.to_le_bytes());
+    // dpds: cumulative decoded-byte counts, one entry per packet.
+    let mut dpds_bytes = Vec::new();
+    for v in dpds {
+        dpds_bytes.extend_from_slice(&v.to_le_bytes());
+    }
 
     let mut body = Vec::new();
     body.extend_from_slice(b"XWMA");
     body.extend_from_slice(&chunk(b"fmt ", &fmt));
-    body.extend_from_slice(&chunk(b"dpds", &dpds));
+    body.extend_from_slice(&chunk(b"dpds", &dpds_bytes));
     body.extend_from_slice(&chunk(b"data", data));
 
     let mut riff = Vec::new();
@@ -61,7 +63,9 @@ fn demuxes_to_wma_caps_and_packets() {
 
     let block_align: u16 = 64;
     let data = vec![0xABu8; 256]; // 4 packets of 64 bytes
-    let xwma = synth_xwma(2, 44100, block_align, &data);
+    // One dpds entry per packet (cumulative decoded bytes); 4096 decoded bytes/packet.
+    let dpds = [4096u32, 8192, 12288, 16384];
+    let xwma = synth_xwma(2, 44100, block_align, &dpds, &data);
 
     let pipeline = gst::Pipeline::new();
     let src = gst::ElementFactory::make("appsrc")
@@ -138,9 +142,9 @@ fn demuxes_to_wma_caps_and_packets() {
     assert_eq!(total_bytes.load(Ordering::SeqCst), data.len() as u32);
     assert_eq!(buffer_count.load(Ordering::SeqCst), 4); // 256 / 64
 
-    // Assert the duration query is answered from the dpds index. The synthetic
-    // file's last dpds entry is 2000 decoded bytes => 2000 / (2ch * 2 bytes) = 500
-    // frames => 500 / 44100 s.
+    // Assert the duration query is answered from the dpds index. The last dpds
+    // entry is 16384 decoded bytes => 16384 / (2ch * 2 bytes) = 4096 frames =>
+    // 4096 / 44100 s.
     let srcpad = demux.static_pad("src").unwrap();
     let mut q = gst::query::Duration::new(gst::Format::Time);
     assert!(srcpad.query(q.query_mut()), "src pad did not answer duration query");
@@ -148,6 +152,11 @@ fn demuxes_to_wma_caps_and_packets() {
         gst::GenericFormattedValue::Time(Some(t)) => t,
         other => panic!("unexpected duration result: {other:?}"),
     };
-    let expected = gst::ClockTime::from_nseconds(500u64 * 1_000_000_000 / 44100);
+    let expected = gst::ClockTime::from_nseconds(4096u64 * 1_000_000_000 / 44100);
     assert_eq!(dur, expected);
+
+    // The src pad should report itself seekable in TIME now that dpds is known.
+    let mut sq = gst::query::Seeking::new(gst::Format::Time);
+    assert!(srcpad.query(sq.query_mut()), "src pad did not answer seeking query");
+    assert!(sq.result().0, "stream should be seekable in TIME");
 }
