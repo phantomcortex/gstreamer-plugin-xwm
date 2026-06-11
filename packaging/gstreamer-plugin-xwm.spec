@@ -1,10 +1,10 @@
 Name:           gstreamer-plugin-xwm
-Version:        0.1.0
+Version:        1.0.0
 Release:        1%{?dist}
 Summary:        GStreamer plugin for Microsoft xWMA (.xwm) audio
 
 License:        MPL-2.0
-URL:            https://github.com/DistinctionOS/gstreamer-plugin-xwm
+URL:            https://github.com/phantomcortex/gstreamer-plugin-xwm
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  rust >= 1.80
@@ -51,5 +51,7 @@ rm -f %{buildroot}%{_libdir}/gstreamer-1.0/libgstxwm.a
 %{_libdir}/gstreamer-1.0/libgstxwm.so
 
 %changelog
-* Thu Jun 11 2026 killawatt <killawattgamer@gmail.com> - 0.1.0-1
-- Initial package: xWMA typefinder + xwmademux demuxer, decode via avdec_wmav2.
+* Thu Jun 11 2026 killawatt <killawattgamer@gmail.com> - 1.0.0-1
+- First stable release.
+- xWMA typefinder + xwmademux demuxer; decode delegated to avdec_wmav2.
+- Accurate duration and seeking derived from the dpds index.
