@@ -42,5 +42,6 @@ gst-launch-1.0 filesrc location=sample.xwm ! decodebin ! audioconvert ! autoaudi
 
 ## Status / TODO
 
-- Phase 2: seeking via the `dpds` index (currently parsed-and-skipped).
+- Duration reporting and accurate `dpds`-based seeking are implemented (push-mode:
+  TIME seeks are translated to upstream byte seeks at packet boundaries).
 - Only WMAv2 (`wFormatTag` 0x0161) is verified; other tags warn and proceed.
