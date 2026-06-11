@@ -44,7 +44,26 @@ Install system-wide (drops `libgstxwm.so` into the GStreamer plugin dir):
 cargo cinstall --release --prefix=/usr --libdir=/usr/lib64
 ```
 
-Or build the Fedora RPM (see `packaging/gstreamer-plugin-xwm.spec`).
+### Fedora RPM
+
+```bash
+rpmdev-setuptree
+git archive --format=tar.gz --prefix=gstreamer-plugin-xwm-0.1.0/ \
+    -o ~/rpmbuild/SOURCES/gstreamer-plugin-xwm-0.1.0.tar.gz HEAD
+cp packaging/gstreamer-plugin-xwm.spec ~/rpmbuild/SPECS/
+rpmbuild -bb ~/rpmbuild/SPECS/gstreamer-plugin-xwm.spec
+sudo dnf install ~/rpmbuild/RPMS/x86_64/gstreamer-plugin-xwm-0.1.0-1.*.x86_64.rpm
+```
+
+This installs `libgstxwm.so` to `%{_libdir}/gstreamer-1.0/`. Because `xwmademux`
+is rank *primary*, it then outranks libav's `avdemux_xwma` (rank *marginal*) so
+`decodebin`/`playbin` pick it automatically — giving correct duration and seeking.
+
+> **Note on Decibels (and other flatpak apps):** a flatpak is sandboxed and uses
+> its *own* bundled GStreamer, so it will **not** see a host-installed plugin and
+> will keep falling back to `avdemux_xwma`. Use a non-flatpak (RPM) build of the
+> player, or build this plugin against the matching freedesktop SDK and expose it
+> with a flatpak override.
 
 ## Status
 
