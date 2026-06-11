@@ -49,7 +49,8 @@ Or build the Fedora RPM (see `packaging/gstreamer-plugin-xwm.spec`).
 ## Status
 
 - ✅ Playback of WMAv2 xWMA via autoplugging (`decodebin`/`playbin`).
-- ⏳ Seeking via the `dpds` index — parsed but not yet wired (phase 2).
+- ✅ Accurate duration and a complete progress bar (derived from the `dpds` index).
+- ✅ Accurate seeking via the `dpds` index (TIME→byte mapping, per-packet timestamps).
 
 ## License
 
