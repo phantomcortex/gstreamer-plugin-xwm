@@ -1,0 +1,44 @@
+[package]
+name = "gst-plugin-xwm"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "GStreamer plugin for Microsoft xWMA (.xwm) audio: typefinder + demuxer"
+authors = ["killawatt <killawattgamer@gmail.com>"]
+repository = "https://github.com/DistinctionOS/gstreamer-plugin-xwm"
+license = "MPL-2.0"
+
+[dependencies]
+gst = { package = "gstreamer", version = "0.24" }
+gst-base = { package = "gstreamer-base", version = "0.24" }
+
+[dev-dependencies]
+gst-app = { package = "gstreamer-app", version = "0.24" }
+
+[build-dependencies]
+gst-plugin-version-helper = "0.8"
+
+[lib]
+name = "gstxwm"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[features]
+# Required by gst-plugin-version-helper / static builds; matches gst-plugins-rs convention.
+static = []
+capi = []
+
+# Build a proper cdylib usable by GStreamer via cargo-c.
+[package.metadata.capi]
+min_version = "0.9.21"
+
+[package.metadata.capi.header]
+enabled = false
+
+[package.metadata.capi.library]
+install_subdir = "gstreamer-1.0"
+versioning = false
+import_library = false
+
+[package.metadata.capi.pkg_config]
+requires_private = "gstreamer-1.0, gstreamer-base-1.0, gobject-2.0, glib-2.0, gmodule-2.0"

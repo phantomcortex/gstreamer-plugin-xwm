@@ -1,0 +1,22 @@
+# Rust / Cargo
+/target/
+**/*.rs.bk
+# Cargo.lock IS committed: this crate produces a final binary plugin and we want
+# reproducible RPM builds.
+
+# cargo-c artifacts
+*.pc
+*.h
+
+# GStreamer build output
+*.so
+
+# Test media (xWMA samples are not redistributable)
+/tests/data/*.xwm
+*.xwm
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
