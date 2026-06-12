@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        fedora: [ 'latest', 'rawhide' ]
+        fedora: [ '44' ]
     container: fedora:${{ matrix.fedora }}
     steps:
       - name: Install build tooling
