@@ -1,5 +1,5 @@
 Name:           gstreamer-plugin-xwm
-Version:        1.0.0
+Version:        1.1.0
 Release:        1%{?dist}
 Summary:        GStreamer plugin for Microsoft xWMA (.xwm) and Bethesda FUZ (.fuz) audio
 
@@ -66,6 +66,10 @@ update-mime-database %{_datadir}/mime &>/dev/null ||:
 %{_datadir}/mime/packages/gstreamer-plugin-xwm.xml
 
 %changelog
+* Tue Jun 16 2026 killawatt <phantom.github@proton.me> - 1.1.0-1
+- Add fuzdemux demuxer for Bethesda .fuz dialogue audio format.
+- Register freedesktop MIME types for .xwm and .fuz files.
+
 * Thu Jun 11 2026 killawatt <phantom.github@proton.me> - 1.0.0-1
 - First stable release.
 - xWMA typefinder + xwmademux demuxer; decode delegated to avdec_wmav2.

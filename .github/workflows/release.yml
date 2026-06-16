@@ -23,6 +23,7 @@ jobs:
           dnf install -y \
             git rust cargo cargo-c \
             gstreamer1-devel gstreamer1-plugins-base-devel \
+            shared-mime-info python3 \
             rpm-build rpmdevtools
 
       - uses: actions/checkout@v4
@@ -32,11 +33,28 @@ jobs:
           set -euo pipefail
           git config --global --add safe.directory "$PWD"
           VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+
+          # If a GitHub release already has RPM assets for this version, use the
+          # next release number so re-runs / hotfix builds don't collide.
+          RELEASE_JSON=$(curl -s \
+            "https://api.github.com/repos/phantomcortex/gstreamer-plugin-xwm/releases/tags/v${VERSION}")
+          RELEASE_NUM=$(echo "$RELEASE_JSON" | python3 -c "
+import sys, json, re
+data = json.load(sys.stdin)
+assets = [a['name'] for a in data.get('assets', [])]
+nums = [int(m.group(1)) for a in assets
+        if (m := re.search(r'-([0-9]+)\.fc[0-9]+\.x86_64\.rpm', a))]
+print(max(nums) + 1 if nums else 1)
+")
+          echo "Version ${VERSION}, Release ${RELEASE_NUM}"
+
           rpmdev-setuptree
           git archive --format=tar.gz \
             --prefix="gstreamer-plugin-xwm-${VERSION}/" \
             -o "$HOME/rpmbuild/SOURCES/gstreamer-plugin-xwm-${VERSION}.tar.gz" HEAD
           cp packaging/gstreamer-plugin-xwm.spec "$HOME/rpmbuild/SPECS/"
+          sed -i "s/^Release:.*/Release:        ${RELEASE_NUM}%{?dist}/" \
+            "$HOME/rpmbuild/SPECS/gstreamer-plugin-xwm.spec"
           rpmbuild -bb "$HOME/rpmbuild/SPECS/gstreamer-plugin-xwm.spec"
           mkdir -p dist
           # Ship the runtime plugin RPM only (skip -debuginfo / -debugsource).
