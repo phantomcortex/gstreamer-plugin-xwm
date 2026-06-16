@@ -1,8 +1,13 @@
 # CLAUDE.md — gstreamer-plugin-xwm
 
-GStreamer plugin that makes Microsoft **xWMA** (`.xwm`) audio files play in any
-GStreamer application (Decibels, Totem, etc.). It provides a **typefinder** for the
-xWMA RIFF magic and an **`xwmademux`** demuxer; actual decoding is delegated to
+Part of the **DistinctionOS** subproject family (`../DistinctionOS`). Built into
+the image as an RPM from the cache-builder pipeline.
+
+GStreamer plugin that makes Microsoft **xWMA** (`.xwm`) and Bethesda **FUZ**
+(`.fuz`) audio files play in any GStreamer application (Decibels, Totem, etc.).
+It provides typefinders for both formats plus two demuxers: **`xwmademux`**
+(parses the xWMA RIFF container) and **`fuzdemux`** (strips the FUZ header and
+feeds the embedded xWMA stream to `xwmademux`). Actual decoding is delegated to
 `avdec_wmav2` from `gst-libav` via `decodebin` autoplugging.
 
 ## Build environment
@@ -26,18 +31,27 @@ distrobox enter Rawhide -- bash -lc 'cd <repo> && cargo build && cargo test'
 
 ## Layout
 
-- `src/lib.rs` — `plugin_define!`, registers typefinder + demuxer.
-- `src/typefind.rs` — `audio/x-xwma` typefinder (RIFF/XWMA magic, `.xwm` ext, PRIMARY rank).
+- `src/lib.rs` — `plugin_define!`, registers all typefinders and demuxers.
+- `src/typefind.rs` — typefinders for `audio/x-xwma` (RIFF/XWMA magic, `.xwm`) and
+  `audio/x-fuz` (FUZE magic, `.fuz`), both at PRIMARY rank.
 - `src/xwmademux/imp.rs` — streaming RIFF parser; emits `audio/x-wma` caps with the fixed
   6-byte WMAv2 `codec_data` (`00 00 00 00 1F 00`) and pushes `nBlockAlign` packets.
-- `packaging/gstreamer-plugin-xwm.spec` — Fedora RPM (installs `libgstxwm.so` to
-  `%{_libdir}/gstreamer-1.0/`, requires `gstreamer1-libav`).
+- `src/fuzdemux/imp.rs` — strips the FUZE header (magic + version byte + lip-animation data)
+  and passes the remaining RIFF/XWMA bytes downstream as `audio/x-xwma`.
+- `data/gstreamer-plugin-xwm.xml` — freedesktop MIME type definitions for `.xwm` and `.fuz`.
+- `packaging/gstreamer-plugin-xwm.spec` — Fedora RPM (installs `.so` + MIME file,
+  requires `gstreamer1-libav`).
 
 ## Verify end-to-end
 
 ```bash
+# xWMA
 gst-discoverer-1.0 sample.xwm
 gst-launch-1.0 filesrc location=sample.xwm ! decodebin ! audioconvert ! autoaudiosink
+
+# FUZ
+gst-discoverer-1.0 sample.fuz
+gst-launch-1.0 filesrc location=sample.fuz ! decodebin ! audioconvert ! autoaudiosink
 ```
 
 ## Status / TODO

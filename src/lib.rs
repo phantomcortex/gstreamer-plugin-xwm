@@ -6,12 +6,14 @@
 // existing `avdec_wmav2` element from gst-libav via decodebin autoplugging.
 use gst::glib;
 
+mod fuzdemux;
 mod typefind;
 mod xwmademux;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     typefind::register(plugin)?;
     xwmademux::register(plugin)?;
+    fuzdemux::register(plugin)?;
     Ok(())
 }
 

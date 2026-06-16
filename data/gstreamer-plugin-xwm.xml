@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+
+  <!-- Microsoft xWMA: RIFF container with form-type "XWMA". Used by XAudio2 games. -->
+  <mime-type type="audio/x-xwma">
+    <comment>Microsoft xWMA audio</comment>
+    <magic priority="80">
+      <match type="string" offset="0" value="RIFF">
+        <match type="string" offset="8" value="XWMA"/>
+      </match>
+    </magic>
+    <glob pattern="*.xwm"/>
+  </mime-type>
+
+  <!-- Bethesda FUZ: FUZE-magic container wrapping xWMA audio + optional lip animation. -->
+  <mime-type type="audio/x-fuz">
+    <comment>Bethesda FUZ audio</comment>
+    <magic priority="80">
+      <match type="string" offset="0" value="FUZE"/>
+    </magic>
+    <glob pattern="*.fuz"/>
+  </mime-type>
+
+</mime-info>
