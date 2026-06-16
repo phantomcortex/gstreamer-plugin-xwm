@@ -38,14 +38,7 @@ jobs:
           # next release number so re-runs / hotfix builds don't collide.
           RELEASE_JSON=$(curl -s \
             "https://api.github.com/repos/phantomcortex/gstreamer-plugin-xwm/releases/tags/v${VERSION}")
-          RELEASE_NUM=$(echo "$RELEASE_JSON" | python3 -c "
-import sys, json, re
-data = json.load(sys.stdin)
-assets = [a['name'] for a in data.get('assets', [])]
-nums = [int(m.group(1)) for a in assets
-        if (m := re.search(r'-([0-9]+)\.fc[0-9]+\.x86_64\.rpm', a))]
-print(max(nums) + 1 if nums else 1)
-")
+          RELEASE_NUM=$(echo "$RELEASE_JSON" | python3 -c "import sys,json,re;d=json.load(sys.stdin);n=[int(m.group(1)) for a in d.get('assets',[]) if (m:=re.search(r'-([0-9]+)\.fc[0-9]+\.x86_64\.rpm',a['name']))];print(max(n)+1 if n else 1)")
           echo "Version ${VERSION}, Release ${RELEASE_NUM}"
 
           rpmdev-setuptree
