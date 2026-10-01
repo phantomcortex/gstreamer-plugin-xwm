@@ -2,9 +2,9 @@
 //
 // FUZ format (used by Skyrim/Fallout 4/Starfield for voiced dialogue):
 //   [0..4]   "FUZE"  magic
-//   [4]      version byte (typically 0x01; others logged and accepted)
-//   [5..9]   u32 little-endian: FNAM (lip-animation) data size; may be 0
-//   [9..]    FNAM data (lip_size bytes), then a complete RIFF/XWMA audio file
+//   [4..8]   u32 little-endian version (typically 1; others logged and accepted)
+//   [8..12]  u32 little-endian: lip-animation (.lip) data size; may be 0
+//   [12..]   lip data (lip_size bytes), then a complete RIFF/XWMA audio file
 //
 // This element strips that header and emits audio/x-xwma so that xwmademux
 // can parse the embedded xWMA stream via normal decodebin autoplugging.
@@ -22,7 +22,7 @@ fn cat() -> gst::DebugCategory {
 
 #[derive(Clone, Copy)]
 enum Stage {
-    /// Waiting for the 9-byte fixed header (magic + version + lip_size).
+    /// Waiting for the 12-byte fixed header (magic + version + lip_size).
     Header,
     /// Skipping `remaining` bytes of lip-animation data.
     Fnam(u32),
@@ -179,7 +179,7 @@ impl FuzDemux {
         loop {
             match state.stage {
                 Stage::Header => {
-                    if state.buf.len() < 9 {
+                    if state.buf.len() < 12 {
                         break;
                     }
                     if &state.buf[0..4] != b"FUZE" {
@@ -190,14 +190,14 @@ impl FuzDemux {
                         );
                         return Err(gst::FlowError::Error);
                     }
-                    let version = state.buf[4];
+                    let version = u32::from_le_bytes(state.buf[4..8].try_into().unwrap());
                     if version != 1 {
                         gst::warning!(cat(), imp = self, "Unexpected FUZ version {version}; trying anyway");
                     }
                     let lip_size =
-                        u32::from_le_bytes(state.buf[5..9].try_into().unwrap());
+                        u32::from_le_bytes(state.buf[8..12].try_into().unwrap());
                     gst::debug!(cat(), imp = self, "FUZ header: version={version}, lip_size={lip_size}");
-                    state.buf.drain(0..9);
+                    state.buf.drain(0..12);
                     state.stage = Stage::Fnam(lip_size);
                 }
 

@@ -160,3 +160,66 @@ fn demuxes_to_wma_caps_and_packets() {
     assert!(srcpad.query(sq.query_mut()), "src pad did not answer seeking query");
     assert!(sq.result().0, "stream should be seekable in TIME");
 }
+
+/// Regression: the FUZ header is `FUZE` + u32 version + u32 lip size (12 bytes),
+/// followed by the lip data and then a complete RIFF/XWMA file. Push the stream
+/// in awkward chunk sizes through `fuzdemux ! xwmademux` and check every xWMA
+/// packet arrives.
+#[test]
+fn fuzdemux_strips_header_and_lip_data() {
+    init();
+
+    let data = vec![0xCDu8; 256]; // 4 packets of 64 bytes
+    let xwma = synth_xwma(1, 44100, 64, &[4096, 8192, 12288, 16384], &data);
+
+    let lip = vec![0x5Au8; 1000];
+    let mut fuz = Vec::new();
+    fuz.extend_from_slice(b"FUZE");
+    fuz.extend_from_slice(&1u32.to_le_bytes());
+    fuz.extend_from_slice(&(lip.len() as u32).to_le_bytes());
+    fuz.extend_from_slice(&lip);
+    fuz.extend_from_slice(&xwma);
+
+    let pipeline = gst::Pipeline::new();
+    let src = gst::ElementFactory::make("appsrc")
+        .property("is-live", false)
+        .build()
+        .unwrap();
+    let fuzdemux = gst::ElementFactory::make("fuzdemux").build().unwrap();
+    let demux = gst::ElementFactory::make("xwmademux").build().unwrap();
+    let sink = gst::ElementFactory::make("fakesink")
+        .property("signal-handoffs", true)
+        .build()
+        .unwrap();
+    pipeline.add_many([&src, &fuzdemux, &demux, &sink]).unwrap();
+    gst::Element::link_many([&src, &fuzdemux, &demux, &sink]).unwrap();
+
+    let total_bytes = Arc::new(AtomicU32::new(0));
+    {
+        let tb = total_bytes.clone();
+        sink.connect("handoff", false, move |args| {
+            let buffer = args[1].get::<gst::Buffer>().unwrap();
+            tb.fetch_add(buffer.size() as u32, Ordering::SeqCst);
+            None
+        });
+    }
+
+    let appsrc = src.dynamic_cast::<gst_app::AppSrc>().unwrap();
+    pipeline.set_state(gst::State::Playing).unwrap();
+    for chunk in fuz.chunks(7) {
+        appsrc.push_buffer(gst::Buffer::from_slice(chunk.to_vec())).unwrap();
+    }
+    appsrc.end_of_stream().unwrap();
+
+    let bus = pipeline.bus().unwrap();
+    for msg in bus.iter_timed(5 * gst::ClockTime::SECOND) {
+        match msg.view() {
+            gst::MessageView::Eos(_) => break,
+            gst::MessageView::Error(e) => panic!("pipeline error: {}", e.error()),
+            _ => {}
+        }
+    }
+    pipeline.set_state(gst::State::Null).unwrap();
+
+    assert_eq!(total_bytes.load(Ordering::SeqCst), data.len() as u32);
+}

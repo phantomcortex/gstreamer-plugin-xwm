@@ -20,3 +20,6 @@
 .vscode/
 *.swp
 .DS_Store
+
+# Local scratch (game audio, not redistributable)
+/tmp/
